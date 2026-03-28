@@ -21,10 +21,10 @@ const swaggerOptions = {
       description: 'API for managing recipes'
     },
     servers: [
-      {
-        url: `http://localhost:${port}`
-      }
-    ]
+  {
+    url: 'https://recipe-api-krcu.onrender.com'
+  }
+]
   },
   apis: ['./server.js']
 };

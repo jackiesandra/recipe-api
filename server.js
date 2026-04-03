@@ -106,6 +106,50 @@ app.get('/recipes', async (req, res) => {
 
 /**
  * @swagger
+ * /recipes/{id}:
+ *   get:
+ *     summary: Get one recipe by ID
+ *     description: Retrieves a single recipe by its ID.
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: Recipe ID
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Recipe found
+ *       400:
+ *         description: Invalid recipe ID
+ *       404:
+ *         description: Recipe not found
+ *       500:
+ *         description: Server error
+ */
+app.get('/recipes/:id', async (req, res) => {
+  try {
+    if (!ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid recipe ID' });
+    }
+
+    const db = mongodb.getDb();
+    const recipeId = new ObjectId(req.params.id);
+
+    const result = await db.collection('recipes').findOne({ _id: recipeId });
+
+    if (!result) {
+      return res.status(404).json({ message: 'Recipe not found' });
+    }
+
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
  * /recipes:
  *   post:
  *     summary: Create a new recipe

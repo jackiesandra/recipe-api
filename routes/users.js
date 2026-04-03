@@ -46,6 +46,50 @@ router.get('/', async (req, res) => {
 
 /**
  * @swagger
+ * /users/{id}:
+ *   get:
+ *     summary: Get one user by ID
+ *     description: Retrieves a single user by ID.
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: User ID
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: User found
+ *       400:
+ *         description: Invalid user ID
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Server error
+ */
+router.get('/:id', async (req, res) => {
+  try {
+    if (!ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid user ID' });
+    }
+
+    const db = mongodb.getDb();
+    const userId = new ObjectId(req.params.id);
+
+    const result = await db.collection('users').findOne({ _id: userId });
+
+    if (!result) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
  * /users:
  *   post:
  *     summary: Create a new user

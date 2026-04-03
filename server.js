@@ -5,6 +5,7 @@ const mongodb = require('./database/connect');
 const ObjectId = require('mongodb').ObjectId;
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
+const userRoutes = require('./routes/users');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -18,21 +19,21 @@ const swaggerOptions = {
     info: {
       title: 'Recipe API',
       version: '1.0.0',
-      description: 'API for managing recipes'
+      description: 'API for managing recipes and users'
     },
     servers: [
-  {
-    url: 'https://recipe-api-krcu.onrender.com'
-  }
-]
+      {
+        url: 'https://recipe-api-krcu.onrender.com'
+      }
+    ]
   },
-  apis: ['./server.js']
+  apis: ['./server.js', './routes/*.js']
 };
 
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
-// Validation function
+// Validation function for recipes
 function validateRecipe(recipe) {
   const errors = [];
 
@@ -297,6 +298,9 @@ app.delete('/recipes/:id', async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
+// Users routes
+app.use('/users', userRoutes);
 
 // Connect to MongoDB
 mongodb.initDb((err) => {

@@ -1,31 +1,117 @@
 const express = require('express');
 require('dotenv').config();
 
+const session = require('express-session');
+const MongoStore = require('connect-mongo').default;
+const passport = require('passport');
+const GitHubStrategy = require('passport-github2').Strategy;
+
 const mongodb = require('./database/connect');
 const ObjectId = require('mongodb').ObjectId;
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
+
 const userRoutes = require('./routes/users');
+const authRoutes = require('./routes/auth');
+const { isAuthenticated } = require('./middleware/auth');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(express.json());
 
-// Swagger config
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || 'supersecret',
+    resave: false,
+    saveUninitialized: false,
+    store: MongoStore.create({
+      mongoUrl: process.env.MONGODB_URI,
+      collectionName: 'sessions'
+    }),
+    cookie: {
+      maxAge: 1000 * 60 * 60 * 24
+    }
+  })
+);
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+passport.use(
+  new GitHubStrategy(
+    {
+      clientID: process.env.GITHUB_CLIENT_ID,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET,
+      callbackURL: process.env.GITHUB_CALLBACK_URL
+    },
+    async (accessToken, refreshToken, profile, done) => {
+      try {
+        const db = mongodb.getDb();
+        const usersCollection = db.collection('oauth_users');
+
+        let user = await usersCollection.findOne({ githubId: profile.id });
+
+        if (!user) {
+          user = {
+            githubId: profile.id,
+            username: profile.username || '',
+            displayName: profile.displayName || '',
+            profileUrl: profile.profileUrl || '',
+            createdAt: new Date().toISOString()
+          };
+
+          const result = await usersCollection.insertOne(user);
+          user._id = result.insertedId;
+        }
+
+        return done(null, user);
+      } catch (error) {
+        return done(error, null);
+      }
+    }
+  )
+);
+
+passport.serializeUser((user, done) => {
+  done(null, user.githubId);
+});
+
+passport.deserializeUser(async (githubId, done) => {
+  try {
+    const db = mongodb.getDb();
+    const user = await db.collection('oauth_users').findOne({ githubId });
+    done(null, user);
+  } catch (error) {
+    done(error, null);
+  }
+});
+
 const swaggerOptions = {
   definition: {
     openapi: '3.0.0',
     info: {
       title: 'Recipe API',
       version: '1.0.0',
-      description: 'API for managing recipes and users'
+      description: 'API for managing recipes, users, and GitHub OAuth authentication'
     },
     servers: [
       {
+        url: 'http://localhost:3000'
+      },
+      {
         url: 'https://recipe-api-krcu.onrender.com'
       }
-    ]
+    ],
+    components: {
+      securitySchemes: {
+        cookieAuth: {
+          type: 'apiKey',
+          in: 'cookie',
+          name: 'connect.sid'
+        }
+      }
+    }
   },
   apis: ['./server.js', './routes/*.js']
 };
@@ -33,7 +119,6 @@ const swaggerOptions = {
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
-// Validation function for recipes
 function validateRecipe(recipe) {
   const errors = [];
 
@@ -135,7 +220,6 @@ app.get('/recipes/:id', async (req, res) => {
 
     const db = mongodb.getDb();
     const recipeId = new ObjectId(req.params.id);
-
     const result = await db.collection('recipes').findOne({ _id: recipeId });
 
     if (!result) {
@@ -153,7 +237,9 @@ app.get('/recipes/:id', async (req, res) => {
  * /recipes:
  *   post:
  *     summary: Create a new recipe
- *     description: Adds a new recipe to the database.
+ *     description: Protected route. Requires login.
+ *     security:
+ *       - cookieAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -181,19 +267,21 @@ app.get('/recipes/:id', async (req, res) => {
  *               name: Quesadilla
  *               price: 8.99
  *               category: Mexican
- *               ingredients: [cheese, tortilla]
+ *               ingredients: ["cheese", "tortilla"]
  *               calories: 500
  *               available: true
- *               createdAt: 2026-03-26
+ *               createdAt: 2026-04-02
  *     responses:
  *       201:
  *         description: Recipe created successfully
  *       400:
  *         description: Validation error
+ *       401:
+ *         description: Unauthorized
  *       500:
  *         description: Server error
  */
-app.post('/recipes', async (req, res) => {
+app.post('/recipes', isAuthenticated, async (req, res) => {
   try {
     const recipe = req.body;
     const errors = validateRecipe(recipe);
@@ -219,7 +307,9 @@ app.post('/recipes', async (req, res) => {
  * /recipes/{id}:
  *   put:
  *     summary: Update a recipe
- *     description: Replaces an existing recipe by ID.
+ *     description: Protected route. Requires login.
+ *     security:
+ *       - cookieAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -250,25 +340,19 @@ app.post('/recipes', async (req, res) => {
  *                 type: boolean
  *               createdAt:
  *                 type: string
- *             example:
- *               name: Tacos al Pastor
- *               price: 10.99
- *               category: Mexican
- *               ingredients: [pork, tortilla, pineapple]
- *               calories: 650
- *               available: true
- *               createdAt: 2026-03-26
  *     responses:
  *       200:
  *         description: Recipe updated successfully
  *       400:
  *         description: Invalid ID or validation error
+ *       401:
+ *         description: Unauthorized
  *       404:
  *         description: Recipe not found
  *       500:
  *         description: Server error
  */
-app.put('/recipes/:id', async (req, res) => {
+app.put('/recipes/:id', isAuthenticated, async (req, res) => {
   try {
     if (!ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ message: 'Invalid recipe ID' });
@@ -304,7 +388,9 @@ app.put('/recipes/:id', async (req, res) => {
  * /recipes/{id}:
  *   delete:
  *     summary: Delete a recipe
- *     description: Deletes a recipe by ID.
+ *     description: Protected route. Requires login.
+ *     security:
+ *       - cookieAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -317,12 +403,14 @@ app.put('/recipes/:id', async (req, res) => {
  *         description: Recipe deleted successfully
  *       400:
  *         description: Invalid recipe ID
+ *       401:
+ *         description: Unauthorized
  *       404:
  *         description: Recipe not found
  *       500:
  *         description: Server error
  */
-app.delete('/recipes/:id', async (req, res) => {
+app.delete('/recipes/:id', isAuthenticated, async (req, res) => {
   try {
     if (!ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ message: 'Invalid recipe ID' });
@@ -330,7 +418,6 @@ app.delete('/recipes/:id', async (req, res) => {
 
     const db = mongodb.getDb();
     const recipeId = new ObjectId(req.params.id);
-
     const result = await db.collection('recipes').deleteOne({ _id: recipeId });
 
     if (result.deletedCount === 0) {
@@ -343,10 +430,14 @@ app.delete('/recipes/:id', async (req, res) => {
   }
 });
 
-// Users routes
 app.use('/users', userRoutes);
+app.use('/auth', authRoutes);
 
-// Connect to MongoDB
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ message: 'Internal server error' });
+});
+
 mongodb.initDb((err) => {
   if (err) {
     console.error('Error connecting to DB:', err);

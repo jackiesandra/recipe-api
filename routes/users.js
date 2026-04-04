@@ -1,6 +1,7 @@
 const express = require('express');
 const { ObjectId } = require('mongodb');
 const mongodb = require('../database/connect');
+const { isAuthenticated } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -75,7 +76,6 @@ router.get('/:id', async (req, res) => {
 
     const db = mongodb.getDb();
     const userId = new ObjectId(req.params.id);
-
     const result = await db.collection('users').findOne({ _id: userId });
 
     if (!result) {
@@ -93,7 +93,9 @@ router.get('/:id', async (req, res) => {
  * /users:
  *   post:
  *     summary: Create a new user
- *     description: Adds a new user to the database.
+ *     description: Protected route. Requires login.
+ *     security:
+ *       - cookieAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -116,10 +118,12 @@ router.get('/:id', async (req, res) => {
  *         description: User created successfully
  *       400:
  *         description: Validation error
+ *       401:
+ *         description: Unauthorized
  *       500:
  *         description: Server error
  */
-router.post('/', async (req, res) => {
+router.post('/', isAuthenticated, async (req, res) => {
   try {
     const user = req.body;
     const errors = validateUser(user);
@@ -145,11 +149,14 @@ router.post('/', async (req, res) => {
  * /users/{id}:
  *   put:
  *     summary: Update a user
- *     description: Replaces an existing user by ID.
+ *     description: Protected route. Requires login.
+ *     security:
+ *       - cookieAuth: []
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
+ *         description: User ID
  *         schema:
  *           type: string
  *     requestBody:
@@ -174,12 +181,14 @@ router.post('/', async (req, res) => {
  *         description: User updated successfully
  *       400:
  *         description: Invalid ID or validation error
+ *       401:
+ *         description: Unauthorized
  *       404:
  *         description: User not found
  *       500:
  *         description: Server error
  */
-router.put('/:id', async (req, res) => {
+router.put('/:id', isAuthenticated, async (req, res) => {
   try {
     if (!ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ message: 'Invalid user ID' });
@@ -215,11 +224,14 @@ router.put('/:id', async (req, res) => {
  * /users/{id}:
  *   delete:
  *     summary: Delete a user
- *     description: Deletes a user by ID.
+ *     description: Protected route. Requires login.
+ *     security:
+ *       - cookieAuth: []
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
+ *         description: User ID
  *         schema:
  *           type: string
  *     responses:
@@ -227,12 +239,14 @@ router.put('/:id', async (req, res) => {
  *         description: User deleted successfully
  *       400:
  *         description: Invalid user ID
+ *       401:
+ *         description: Unauthorized
  *       404:
  *         description: User not found
  *       500:
  *         description: Server error
  */
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', isAuthenticated, async (req, res) => {
   try {
     if (!ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ message: 'Invalid user ID' });

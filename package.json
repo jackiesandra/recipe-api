@@ -1,7 +1,7 @@
 {
   "name": "recipe-api",
   "version": "1.0.0",
-  "description": "Recipe API with MongoDB, Swagger, and GitHub OAuth",
+  "description": "Recipe API with GitHub OAuth",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -11,17 +11,17 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "connect-mongo": "^5.1.0",
-    "dotenv": "^17.3.1",
-    "express": "^5.2.1",
-    "express-session": "^1.18.1",
-    "mongodb": "^7.1.0",
-    "passport": "^0.7.0",
-    "passport-github2": "^0.1.12",
-    "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1"
+    "connect-mongo": "5.1.0",
+    "dotenv": "17.3.1",
+    "express": "5.2.1",
+    "express-session": "1.18.1",
+    "mongodb": "6.13.0",
+    "passport": "0.7.0",
+    "passport-github2": "0.1.12",
+    "swagger-jsdoc": "6.2.8",
+    "swagger-ui-express": "5.0.1"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "nodemon": "3.1.10"
   }
 }
